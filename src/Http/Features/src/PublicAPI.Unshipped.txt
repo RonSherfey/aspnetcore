@@ -28,7 +28,5 @@ Microsoft.AspNetCore.Http.Features.IFeatureCollection.Set<TFeature>(TFeature? in
 Microsoft.AspNetCore.Http.Features.IFeatureCollection.this[System.Type! key].get -> object?
 Microsoft.AspNetCore.Http.Features.IFeatureCollection.this[System.Type! key].set -> void
 Microsoft.AspNetCore.Http.Features.FeatureCollection.FeatureCollection(int initialCapacity) -> void
-Microsoft.AspNetCore.Http.Features.IPersistentStateFeature
-Microsoft.AspNetCore.Http.Features.IPersistentStateFeature.State.get -> System.Collections.Generic.IDictionary<object!, object?>!
 static readonly Microsoft.AspNetCore.Http.Features.FeatureReference<T>.Default -> Microsoft.AspNetCore.Http.Features.FeatureReference<T>
 virtual Microsoft.AspNetCore.Http.Features.FeatureCollection.Revision.get -> int

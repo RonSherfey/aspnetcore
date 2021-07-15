@@ -4,6 +4,7 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Connections;
+using Microsoft.AspNetCore.Connections.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Features;
@@ -18,6 +19,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http2
                                          IPersistentStateFeature
     {
         private IHeaderDictionary? _userTrailers;
+
+        // Persistent state collection is not reset with a stream by design.
         private IDictionary<object, object?>? _persistentState;
 
         IHeaderDictionary IHttpResponseTrailersFeature.Trailers

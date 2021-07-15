@@ -3,7 +3,7 @@
 
 using System.Collections.Generic;
 
-namespace Microsoft.AspNetCore.Http.Features
+namespace Microsoft.AspNetCore.Connections.Features
 {
     /// <summary>
     /// Provides access to a key/value collection that can be used to persist state between connections and requests.
