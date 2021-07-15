@@ -3,6 +3,7 @@
 
 using System;
 using System.Buffers;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -210,6 +211,34 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Core.Tests
             await StopConnectionAsync(expectedLastStreamId: 3, ignoreNonGoAwayFrames: false);
         }
 
+        private class ResponseTrailersWrapper : IHeaderDictionary
+        {
+            readonly IHeaderDictionary _innerHeaders;
+
+            public ResponseTrailersWrapper(IHeaderDictionary headers)
+            {
+                _innerHeaders = headers;
+            }
+
+            public StringValues this[string key] { get => _innerHeaders[key]; set => _innerHeaders[key] = value; }
+            public long? ContentLength { get => _innerHeaders.ContentLength; set => _innerHeaders.ContentLength = value; }
+            public ICollection<string> Keys => _innerHeaders.Keys;
+            public ICollection<StringValues> Values => _innerHeaders.Values;
+            public int Count => _innerHeaders.Count;
+            public bool IsReadOnly => _innerHeaders.IsReadOnly;
+            public void Add(string key, StringValues value) => _innerHeaders.Add(key, value);
+            public void Add(KeyValuePair<string, StringValues> item) => _innerHeaders.Add(item);
+            public void Clear() => _innerHeaders.Clear();
+            public bool Contains(KeyValuePair<string, StringValues> item) => _innerHeaders.Contains(item);
+            public bool ContainsKey(string key) => _innerHeaders.ContainsKey(key);
+            public void CopyTo(KeyValuePair<string, StringValues>[] array, int arrayIndex) => _innerHeaders.CopyTo(array, arrayIndex);
+            public IEnumerator<KeyValuePair<string, StringValues>> GetEnumerator() => _innerHeaders.GetEnumerator();
+            public bool Remove(string key) => _innerHeaders.Remove(key);
+            public bool Remove(KeyValuePair<string, StringValues> item) => _innerHeaders.Remove(item);
+            public bool TryGetValue(string key, out StringValues value) => _innerHeaders.TryGetValue(key, out value);
+            IEnumerator IEnumerable.GetEnumerator() => _innerHeaders.GetEnumerator();
+        }
+
         [Fact]
         public async Task ResponseTrailers_MultipleStreams_Reset()
         {
@@ -227,7 +256,18 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Core.Tests
             {
                 requestCount++;
 
-                var trailers = context.Features.Get<IHttpResponseTrailersFeature>().Trailers;
+                var trailersFeature = context.Features.Get<IHttpResponseTrailersFeature>();
+
+                IHeaderDictionary trailers;
+                if (requestCount == 1)
+                {
+                    trailers = new ResponseTrailersWrapper(trailersFeature.Trailers);
+                    trailersFeature.Trailers = trailers;
+                }
+                else
+                {
+                    trailers = trailersFeature.Trailers;
+                }
                 trailers["trailer-" + requestCount] = "true";
                 return Task.CompletedTask;
             });
