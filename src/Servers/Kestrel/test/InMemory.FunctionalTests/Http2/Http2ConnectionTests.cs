@@ -15,6 +15,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Connections.Features;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Features;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http2;
@@ -205,6 +206,84 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Core.Tests
             var contentType2 = _receivedHeaders["Content-Type"];
 
             Assert.Same(contentType1, contentType2);
+
+            await StopConnectionAsync(expectedLastStreamId: 3, ignoreNonGoAwayFrames: false);
+        }
+
+        [Fact]
+        public async Task ResponseTrailers_MultipleStreams_Reset()
+        {
+            IEnumerable<KeyValuePair<string, string>> requestHeaders = new[]
+            {
+                new KeyValuePair<string, string>(HeaderNames.Method, "GET"),
+                new KeyValuePair<string, string>(HeaderNames.Path, "/hello"),
+                new KeyValuePair<string, string>(HeaderNames.Scheme, "http"),
+                new KeyValuePair<string, string>(HeaderNames.Authority, "localhost:80"),
+                new KeyValuePair<string, string>(HeaderNames.ContentType, "application/json")
+            };
+
+            var requestCount = 0;
+            await InitializeConnectionAsync(context =>
+            {
+                requestCount++;
+
+                var trailers = context.Features.Get<IHttpResponseTrailersFeature>().Trailers;
+                trailers["trailer-" + requestCount] = "true";
+                return Task.CompletedTask;
+            });
+
+            await StartStreamAsync(1, requestHeaders, endStream: true);
+
+            await ExpectAsync(Http2FrameType.HEADERS,
+                withLength: 36,
+                withFlags: (byte)(Http2HeadersFrameFlags.END_HEADERS),
+                withStreamId: 1);
+
+            var trailersFrame = await ExpectAsync(Http2FrameType.HEADERS,
+                withLength: 16,
+                withFlags: (byte)(Http2HeadersFrameFlags.END_HEADERS | Http2HeadersFrameFlags.END_STREAM),
+                withStreamId: 1);
+
+            _hpackDecoder.Decode(trailersFrame.PayloadSequence, endHeaders: true, handler: this);
+
+            Assert.Single(_decodedHeaders);
+            Assert.Equal("true", _decodedHeaders["trailer-1"]);
+
+            _decodedHeaders.Clear();
+
+            // Ping will trigger the stream to be returned to the pool so we can assert it
+            await SendPingAsync(Http2PingFrameFlags.NONE);
+            await ExpectAsync(Http2FrameType.PING,
+                withLength: 8,
+                withFlags: (byte)Http2PingFrameFlags.ACK,
+                withStreamId: 0);
+            await SendPingAsync(Http2PingFrameFlags.NONE);
+            await ExpectAsync(Http2FrameType.PING,
+                withLength: 8,
+                withFlags: (byte)Http2PingFrameFlags.ACK,
+                withStreamId: 0);
+
+            // Stream has been returned to the pool
+            Assert.Equal(1, _connection.StreamPool.Count);
+
+            await StartStreamAsync(3, requestHeaders, endStream: true);
+
+            await ExpectAsync(Http2FrameType.HEADERS,
+                withLength: 6,
+                withFlags: (byte)(Http2HeadersFrameFlags.END_HEADERS),
+                withStreamId: 3);
+
+            trailersFrame = await ExpectAsync(Http2FrameType.HEADERS,
+                withLength: 16,
+                withFlags: (byte)(Http2HeadersFrameFlags.END_HEADERS | Http2HeadersFrameFlags.END_STREAM),
+                withStreamId: 3);
+
+            _hpackDecoder.Decode(trailersFrame.PayloadSequence, endHeaders: true, handler: this);
+
+            Assert.Single(_decodedHeaders);
+            Assert.Equal("true", _decodedHeaders["trailer-2"]);
+
+            _decodedHeaders.Clear();
 
             await StopConnectionAsync(expectedLastStreamId: 3, ignoreNonGoAwayFrames: false);
         }
